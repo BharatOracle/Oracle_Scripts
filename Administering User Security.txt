@@ -1,0 +1,541 @@
+###########################
+Administering User Security
+###########################
+
+The following terms relate to administering database users and assist you in understanding the
+objectives:
+• A database user account is a way to organize the ownership of and access to database objects.
+• A password is an authentication by the Oracle database.
+• A privilege is a right to execute a particular type of SQL statement or to access another user’s
+object.
+• A role is a named group of related privileges that are granted to users or to other roles.
+• Profiles impose a named set of resource limits on database usage and instance resources and
+manage account status and password management rules.
+• A quota is a space allowance in a given tablespace. This is one of the ways by which you can
+control resource usage by users.
+
+
+Database User Accounts
+Each database user account has:
+• A unique username
+• An authentication method
+• A default tablespace
+• A temporary tablespace
+• A user profile
+• An initial consumer group
+• An account status
+
+
+A schema:
+• Is a collection of database objects that are owned by a
+database user
+• Has the same name as the user account
+
+
+Predefined Administrative Accounts
+• SYS account:
+– Is granted the DBA role, as well as several other roles.
+– Has all privileges with ADMIN OPTION
+– Is required for startup, shutdown, and some maintenance
+commands
+– Owns the data dictionary and the Automatic Workload
+Repository (AWR)
+
+• SYSTEM account is granted the DBA, MGMT_USER, and
+AQ_ADMINISTRATOR_ROLE roles.
+
+• DBSNMP account is granted the OEM_MONITOR role.
+
+• SYSMAN account is granted the MGMT_USER, RESOURCE
+and SELECT_CATALOG_ROLE roles.
+
+• These accounts are not used for routine operations.
+
+############################
+Administrator Authentication
+############################
+
+Operating system security:
+• DBAs must have the OS privileges to create and delete
+files.
+• Typical database users should not have the OS privileges
+to create or delete database files.
+Administrator security:
+• For SYSDBA, SYSOPER, and SYSASM connections:
+– DBA user by name is audited for password file and strong
+authentication methods
+– OS account name is audited for OS authentication
+– OS authentication takes precedence over password file
+authentication for privileged users
+– Password file uses case-sensitive passwords
+
+#####################
+Create a user. Syntax:
+######################
+
+
+   CREATE USER TEST 
+        IDENTIFIED BY test123		-- Assign password
+        DEFAULT	TABLESPACE  TEST_DATA	-- Assign space for table and index segments
+        TEMPORARY TABLESPACE TEMP;	-- Assign sort space
+
+options:
+   
+   DEFAULT TABLESPACE tablespace
+   TEMPORARY TABLESPACE tablespace
+   QUOTA int {K | M} ON tablespace
+   QUOTA UNLIMITED ON tablespace
+   PROFILE profile_name
+   PASSWORD EXPIRE
+   ACCOUNT {LOCK|UNLOCK}
+
+
+ALTER USER test ACCOUNT LOCK    -- lock a user account
+ALTER USER test ACCOUNT UNLOCK; -- unlocks a locked users account
+GRANT CONNECT, RESOURCE TO test;
+GRANT DBA TO test;	-- Make user a DB Administrator
+ALTER USER test PASSWORD EXPIRE;  -- Force user to choose a new password
+
+
+
+Privileges
+There are two types of user privileges:
+• System: Enables users to perform particular actions in the
+database
+• Object: Enables users to access and manipulate a specific
+object
+
+
+
+Privileges
+
+A privilege is a right to execute a particular type of SQL statement or to access another user’s object.
+The Oracle database enables you to control what the users can and cannot do in the database.
+Privileges are divided into two categories:
+
+• System privileges: Each system privilege allows a user to perform a particular database
+operation or class of database operations. For example, the privilege to create tablespaces is a
+system privilege. System privileges can be granted by the administrator or by someone who has
+been given explicit permission to administer the privilege. There are more than 170 distinct
+system privileges. Many system privileges contain the ANY clause.
+
+Eg: 
+
+GRANT <system_privilege> TO <grantee clause> [WITH ADMIN OPTION]
+
+grant create session to test;
+grant create view to test;
+
+
+grant create table to test with admin option;
+
+
+Here with admin option means scott can pass on this privilege to any other user ;
+
+Revoking system privs:
+
+revole create table from test;
+
+GRANT ANY OBJECT PRIVILEGE: This privilege allows you to grant object permissions on
+objects that you do not own.
+
+
+• Object privileges: Object privileges allow a user to perform a particular action on a specific
+object, such as a table, view, sequence, procedure, function, or package. Without specific
+permission, users can access only their own objects. Object privileges can be granted by the
+owner of an object, by the administrator, or by someone who has been explicitly given
+permission to grant privileges on the object.
+
+Eg:
+
+GRANT <object_privilege> ON <object> TO <grantee clause>
+[WITH GRANT OPTION]
+
+grant select on scott.emp to test;
+grant select on scott.emp to test with admin option;
+
+
+here with admin option means test user can pass on this privs to any other user;
+
+
+Revoking object privs:
+
+
+revoke select on scott.emp from test;
+
+####################
+Views to check privs
+####################
+
+1. DBA_SYS_PRIVS => 
+
+DBA_SYS_PRIVS describes system privileges granted to users and roles. This view does not display the USERNAME column.
+
+
+i. Craete one test user and grant system privs like create session and create table  
+
+
+SQL> create user test identified by test123;
+
+User created.
+
+SQL> grant create session,create table to test;
+
+Grant succeeded.
+
+SQL> alter user test quota unlimited on users;
+
+User altered.
+
+
+ii. check system privs for test user now 
+
+SQL> select GRANTEE,PRIVILEGE,ADMIN_OPTION from dba_sys_privs where GRANTEE='TEST';
+
+GRANTEE                        PRIVILEGE                                ADM
+------------------------------ ---------------------------------------- ---
+TEST                           CREATE TABLE                             NO
+TEST                           CREATE SESSION                           NO
+
+
+2. DBA_TAB_PRIVS
+USER_TAB_PRIVS describes the object grants for which the current user is the object owner, grantor, or grantee.
+
+i. grant some object privs to test 
+
+SQL> grant select on scott.emp to test;
+
+Grant succeeded.
+
+SQL> grant update on scott.emp to test;
+
+Grant succeeded.
+
+SQL> grant delete on scott.emp to test;
+
+Grant succeeded.
+
+ii. Now check the privs using view '
+
+set lines 1234
+select GRANTEE,OWNER,TABLE_NAME,GRANTOR,PRIVILEGE from dba_tab_privs where TABLE_NAME='cisadm.ci_mr_k';
+
+GRANTEE       OWNER          TABLE_NAME                     GRANTOR                        PRIVILEGE
+------------------------------ ------------------------------ ------------------------------ --------
+TEST          SCOTT          EMP                            SCOTT                          DELETE
+TEST          SCOTT          EMP                            SCOTT                          UPDATE
+TEST          SCOTT          EMP                            SCOTT                          SELECT
+
+
+3. SESSION_PRIVS
+
+SESSION_PRIVS describes the privileges that are currently available to the user.
+
+SQL> conn test/test123
+Connected.
+SQL> select * from SESSION_PRIVS;
+
+PRIVILEGE
+----------------------------------------
+CREATE SESSION
+CREATE TABLE
+
+4. DBA_COL_PRIVS
+
+DBA_COL_PRIVS describes all column object grants in the database.
+
+5. ROLE_SYS_PRIVS
+
+ROLE_SYS_PRIVS describes system privileges granted to roles. Information is provided only about roles to which the user has access.
+
+6. ROLE_TAB_PRIVS
+
+ROLE_TAB_PRIVS describes table privileges granted to roles. Information is provided only about roles to which the user has access.
+
+
+7. DBA_ROLE_PRIVS
+
+DBA_ROLE_PRIVS describes the roles granted to all users and roles in the database
+
+eg.
+
+SQL> grant connect to test;
+
+Grant succeeded.
+
+SQL> select GRANTEE,GRANTED_ROLE,ADMIN_OPTION,DEFAULT_ROLE from DBA_ROLE_PRIVS where grantee='RPTUSER';
+
+GRANTEE                        GRANTED_ROLE                   ADM DEF
+------------------------------ ------------------------------ --- ---
+TEST                           CONNECT                        NO  YES
+
+SQL>
+
+8.DBA_ROLES
+
+DBA_ROLES lists all roles that exist in the database. 
+
+SQL> select * from dba_roles;
+
+
+#####
+Roles
+#####
+
+Benefits of Roles
+• Easier privilege management: Use roles to simplify privilege management. Rather than
+granting the same set of privileges to several users, you can grant the privileges to a role and
+then grant that role to each user.
+• Dynamic privilege management: If the privileges associated with a role are modified, all
+users who are granted the role acquire the modified privileges automatically and immediately.
+• Selective availability of privileges: Roles can be enabled and disabled to turn privileges on
+and off temporarily. This allows the privileges of the user to be controlled in a given situation.
+
+##########################
+Predefined Roles in oracle
+##########################
+
+Role				Privileges Included
+
+CONNECT				CREATE SESSION
+RESOURCE			CREATE CLUSTER, CREATE INDEXTYPE, CREATE
+				OPERATOR, CREATE PROCEDURE, CREATE
+				SEQUENCE, CREATE TABLE, CREATE TRIGGER,
+				CREATE TYPE
+
+SCHEDULER_ ADMIN		CREATE ANY JOB, CREATE EXTERNAL JOB, CREATE
+				JOB, EXECUTE ANY CLASS, EXECUTE ANY
+				PROGRAM, MANAGE SCHEDULER
+
+DBA 				Most system privileges; several other roles. Do not grant
+				to nonadministrators.
+
+	
+SELECT_CATALOG_ROLE		No system privileges; HS_ADMIN_ROLE and over 1,700
+				object privileges on the data dictionary
+
+------------
+Create Role: 
+------------
+
+create role APP_DBA ;
+
+grant create session, create table to APP_DBA;
+grant select on scott.emp to APP_DBA;
+
+-----------------
+Grant Role to User
+-----------------
+
+grant APP_DBA to TEST;
+
+----------------------
+Revoke Role from Users
+----------------------
+
+revoke app_dba from test;
+
+
+##################
+Profiles and Users
+##################
+
+Users are assigned only one profile at a time.
+
+Profiles:
+• Control resource consumption
+• Manage account status and password expiration
+
+
+
+Profiles enable the administrator to control the following system resources:
+
+• CPU: CPU resources may be limited on a per-session or per-call basis. A CPU/Session
+limitation of 1,000 means that if any individual session that uses this profile consumes more
+than 10 seconds of CPU time (CPU time limitations are in hundredths of a second), that session
+receives an error and is logged off:
+ORA-02392: exceeded session limit on CPU usage, you are being
+logged off
+
+
+Network/Memory: Each database session consumes system memory resources and (if the
+session is from a user who is not local to the server) network resources. You can specify the
+following:
+
+- Connect Time: Indicates for how many minutes a user can be connected before being
+automatically logged off
+
+- Idle Time: Indicates for how many minutes a user’s session can remain idle before being
+automatically logged off. Idle time is calculated for the server process only. It does not
+take into account application activity. The IDLE_TIME limit is not affected by longrunning
+queries and other operations.
+
+- Concurrent Sessions: Indicates how many concurrent sessions can be created by using a
+database user account
+
+- Private SGA: Limits the amount of space consumed in the System Global Area (SGA)
+for sorting, merging bitmaps, and so on. This restriction takes effect only if the session
+uses a shared server. (Shared servers are covered in the lesson titled “Configuring the
+Oracle Network Environment.”)
+
+Disk I/O: This limits the amount of data a user can read at the per-session level or per-call
+level. Reads/Session and Reads/Call place a limitation on the total number of reads from both
+memory and the disk. This can be done to ensure that no I/O-intensive statements overuse
+memory and disks.
+
+
+Note: Resource Manager is an alternative to many of the profile settings. 
+
+----------------------------------------
+Implementing Password Security Features
+----------------------------------------
+Oracle password management is implemented with user profiles. Profiles can provide many standard
+security features.
+
+
+Account locking: Enables automatic locking of accounts for a set duration when users fail to log in
+to the system in the specified number of attempts
+• FAILED_LOGIN_ATTEMPTS: Specifies the number of failed login attempts before the
+lockout of the account
+• PASSWORD_LOCK_TIME: Specifies the number of days for which the account is locked after
+the specified number of failed login attempts
+
+Password aging and expiration: Enables user passwords to have a lifetime, after which the
+passwords expire and must be changed
+• PASSWORD_LIFE_TIME: Determines the lifetime of the password in days, after which the
+password expires
+• PASSWORD_GRACE_TIME: Specifies a grace period in days for changing the password after
+the first successful login after the password has expired
+
+
+Password history: Checks the new password to ensure that the password is not reused for a specified
+amount of time or a specified number of password changes. These checks can be implemented by
+using one of the following:
+• PASSWORD_REUSE_TIME: Specifies that a user cannot reuse a password for a given number
+of days
+• PASSWORD_REUSE_MAX: Specifies the number of password changes that are required before
+the current password can be reused
+
+
+SQL> select * from dba_profiles where PROFILE='DEFAULT';
+
+PROFILE                        RESOURCE_NAME                    RESOURCE LIMIT
+------------------------------ -------------------------------- -------- ------------
+DEFAULT                        COMPOSITE_LIMIT                  KERNEL   UNLIMITED
+DEFAULT                        SESSIONS_PER_USER                KERNEL   UNLIMITED
+DEFAULT                        CPU_PER_SESSION                  KERNEL   UNLIMITED
+DEFAULT                        CPU_PER_CALL                     KERNEL   UNLIMITED
+DEFAULT                        LOGICAL_READS_PER_SESSION        KERNEL   UNLIMITED
+DEFAULT                        LOGICAL_READS_PER_CALL           KERNEL   UNLIMITED
+DEFAULT                        IDLE_TIME                        KERNEL   UNLIMITED
+DEFAULT                        CONNECT_TIME                     KERNEL   UNLIMITED
+DEFAULT                        PRIVATE_SGA                      KERNEL   UNLIMITED
+DEFAULT                        FAILED_LOGIN_ATTEMPTS            PASSWORD 10
+DEFAULT                        PASSWORD_LIFE_TIME               PASSWORD 180
+DEFAULT                        PASSWORD_REUSE_TIME              PASSWORD UNLIMITED
+DEFAULT                        PASSWORD_REUSE_MAX               PASSWORD UNLIMITED
+DEFAULT                        PASSWORD_VERIFY_FUNCTION         PASSWORD NULL
+DEFAULT                        PASSWORD_LOCK_TIME               PASSWORD 1
+DEFAULT                        PASSWORD_GRACE_TIME              PASSWORD 7
+
+SQL> CREATE PROFILE my_profile LIMIT
+       SESSIONS_PER_USER 2
+       IDLE_TIME 5
+       CONNECT_TIME 10;
+
+-- Create Profile
+CREATE PROFILE "MY_PROFILE1" LIMIT
+FAILED_LOGIN_ATTEMPTS 3
+PASSWORD_GRACE_TIME 10
+PASSWORD_REUSE_TIME UNLIMITED
+PASSWORD_LIFE_TIME 90 PASSWORD_REUSE_MAX 1;
+
+-- Create User
+CREATE USER TEST PROFILE MY_PROFILE
+IDENTIFIED BY test123 DEFAULT TABLESPACE USERS ACCOUNT UNLOCK;
+
+
+##########################
+Assigning Quotas to Users
+##########################
+
+
+Users who do not have the UNLIMITED TABLESPACE system
+privilege must be given a quota before they can create objects
+in a tablespace.
+
+
+Quotas can be:
+• A specific value in megabytes or kilobytes
+• Unlimited
+
+
+Eg: 
+
+alter user TEST quota 10m on users;
+alter user TEST quota unlimited on users;
+
+-------------------------------
+Grant quota while creating user
+-------------------------------
+
+create user test identified by test123 quota unlimited on users;
+
+-----------
+Check Quota
+-----------
+
+set lines 1234
+select * from dba_ts_quotas;
+
+
+TABLESPACE_NAME       USERNAME              BYTES  MAX_BYTES     BLOCKS MAX_BLOCKS DRO
+------------------------------ ------------------------------ ---------- ---------- ---------- 
+USERS                 TEST                   0         -1          0         -1 NO
+SYSAUX                APPQOSSYS              0         -1          0         -1 NO
+
+Note: MAX_BLOCKS=-1 means user has unlimited quota on given tablespace
+
+
+#########################################
+Applying the Principle of Least Privilege
+#########################################
+
+
+The principle of least privilege means that a user must be given only those privileges that are
+required to efficiently complete a task. This reduces the chances of users modifying or viewing data
+(either accidentally or maliciously) that they do not have the privilege to modify or view.
+Protect the data dictionary: The O7_DICTIONARY_ACCESSIBILITY parameter is set by
+default to FALSE. You must not allow this to be changed without a very good reason because it
+prevents users with the ANY TABLE system privileges from accessing the data dictionary base tables.
+It also ensures that the SYS user can log in only as SYSDBA.
+
+
+Restrict remote database authentication: The REMOTE_OS_AUTHENT parameter is set to FALSE
+by default. It must not be changed unless all clients can be trusted to authenticate users appropriately.
+With the advent of Secure External Password Store (available in Oracle Database 10g Release 2),
+there are few compelling reasons ever to allow remote OS authentication.
+In the remote authentication process:
+• The database user is authenticated externally
+• The remote system authenticates the user
+• The user logs in to the database without further authentication
+Note: Always test your applications thoroughly if you have revoked privileges.
+
+
+Protect Privileged Accounts
+Privileged accounts can be protected by:
+• Using password file with case-sensitive passwords
+• Enabling strong authentication for administrator roles
+
+
+Setting Database Administrator Authentication
+Users with SYSDBA, SYSOPER, or SYSASM privileges must always be authenticated. When
+connecting locally, the user is authenticated by the local OS by being a member of a privileged OS
+group. If connecting remotely, a password file is used to authenticate privileged users. If the
+password file is configured, it will be checked first. In Oracle Database 11g, these passwords are
+case-sensitive. Oracle Database 11g provides other methods that make remote administrator
+authentication more secure and centralize the administration of these privileged users.
+When a database is created using the Database Configuration Assistant, the password file is casesensitive.
+If you upgrade from earlier database versions, be sure to make the password file casesensitive
+for remote connections:
+orapwd file=orapworcl entries=5 ignorecase=N
